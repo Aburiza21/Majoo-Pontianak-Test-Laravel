@@ -40,7 +40,7 @@ class DatabaseSeeder extends Seeder
         (2, 2, 'Outlet 1', now(), 2, now(),2), 
         (3, 1, 'Outlet 2', now(), 1, now(),1)");
 
-        // Seed transactions
+        // Seed transactions (August)
         DB::insert("insert into transactions (id, merchant_id, outlet_id, bill_total, created_at, created_by, updated_at, updated_by) values
         (1, 1, 1, 2000, '2026-08-01 12:30:04', 1, '2026-08-01 12:30:04',1),
         (2, 1, 1, 2500, '2026-08-01 17:20:14', 1, '2026-08-01 17:20:14',1),
@@ -64,5 +64,12 @@ class DatabaseSeeder extends Seeder
         (20, 2, 2, 7000, '2026-08-09 16:59:30', 2, '2026-08-09 16:59:30',2),
         (21, 2, 2, 1000, '2026-08-10 12:31:04', 2, '2026-08-10 12:31:04',2),
         (22, 2, 2, 7000, '2026-08-11 16:59:30', 2, '2026-08-11 16:59:30',2)");
+
+        // Seed transactions (November) to fulfill the test criteria: "Merchant (November)"
+        DB::insert("insert into transactions (id, merchant_id, outlet_id, bill_total, created_at, created_by, updated_at, updated_by) values
+        (23, 1, 1, 5000, '2026-11-01 10:00:00', 1, '2026-11-01 10:00:00',1),
+        (24, 1, 3, 3000, '2026-11-05 12:00:00', 1, '2026-11-05 12:00:00',1),
+        (25, 1, 1, 4500, '2026-11-15 15:30:00', 1, '2026-11-15 15:30:00',1),
+        (26, 2, 2, 8000, '2026-11-20 09:00:00', 2, '2026-11-20 09:00:00',2)");
     }
 }
