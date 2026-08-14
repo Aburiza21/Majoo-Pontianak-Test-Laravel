@@ -3,15 +3,20 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use App\Models\Merchant;
-use App\Models\Outlet;
-use Carbon\Carbon;
+use App\Services\ReportService;
 use Illuminate\Pagination\LengthAwarePaginator;
 use OpenApi\Attributes as OA;
+use Exception;
 
 class ReportController extends Controller
 {
+    protected ReportService $reportService;
+
+    public function __construct(ReportService $reportService)
+    {
+        $this->reportService = $reportService;
+    }
+
     /**
      * GET /api/report/monthly
      * Query params: merchant_id, outlet_id (optional), month (YYYY-MM)
@@ -71,103 +76,27 @@ class ReportController extends Controller
 
         $merchantId = $request->integer('merchant_id');
         $outletId   = $request->integer('outlet_id');
-        $month      = $request->input('month'); // e.g. "2026-08"
+        $month      = $request->input('month');
         $user       = $request->user();
 
-        // 1. Strict Multi-Tenancy Validation
-        $merchant = Merchant::where('id', $merchantId)->where('user_id', $user->id)->first();
-        if (!$merchant) {
-            return response()->json(['error' => 'Forbidden. Merchant does not belong to you or does not exist.'], 403);
+        try {
+            // Retrieve data using the ReportService
+            $reportData = $this->reportService->getMonthlyReport($merchantId, $outletId, $month, $user->id);
+        } catch (Exception $e) {
+            $code = $e->getCode() ?: 500;
+            return response()->json(['error' => $e->getMessage()], $code);
         }
 
-        if ($outletId) {
-            $outlet = Outlet::where('id', $outletId)->where('merchant_id', $merchantId)->first();
-            if (!$outlet) {
-                return response()->json(['error' => 'Forbidden or Not Found. Outlet does not belong to this merchant.'], 403);
-            }
-        }
+        $summary = $reportData['summary'];
+        $details = $reportData['reportData'];
 
-        // Parse year and month
-        [$year, $mon] = explode('-', $month);
-
-        // 2. Base query and report generation wrapped in Redis Cache
-        // Cache key based on merchant, outlet, and month
-        $cacheKey = "report_monthly_{$merchantId}_{$outletId}_{$month}";
-        
-        // Cache for 60 minutes
-        $cachedReport = \Illuminate\Support\Facades\Cache::remember($cacheKey, 60 * 60, function () use ($merchantId, $outletId, $month, $year, $mon) {
-            $query = DB::table('transactions')
-                ->selectRaw("
-                    DATE(created_at) AS date,
-                    SUM(bill_total)  AS total_revenue,
-                    COUNT(id)        AS total_transactions
-                ")
-                ->where('merchant_id', $merchantId)
-                ->whereYear('created_at', $year)
-                ->whereMonth('created_at', $mon);
-
-            if ($outletId) {
-                $query->where('outlet_id', $outletId);
-            }
-
-            $transactions = $query
-                ->groupByRaw("DATE(created_at)")
-                ->get()
-                ->keyBy('date');
-
-            $startDate = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
-            $daysInMonth = $startDate->daysInMonth;
-            
-            $reportData = [];
-            $totalRevenue = 0;
-            $totalTransactions = 0;
-
-            for ($i = 1; $i <= $daysInMonth; $i++) {
-                $dateStr = $startDate->copy()->day($i)->format('Y-m-d');
-                
-                if ($transactions->has($dateStr)) {
-                    $tx = $transactions->get($dateStr);
-                    $revenue = (float) $tx->total_revenue;
-                    $count = (int) $tx->total_transactions;
-                } else {
-                    $revenue = 0;
-                    $count = 0;
-                }
-                
-                $reportData[] = [
-                    'date' => $dateStr,
-                    'total_revenue' => $revenue,
-                    'total_transactions' => $count
-                ];
-                
-                $totalRevenue += $revenue;
-                $totalTransactions += $count;
-            }
-
-            $summary = [
-                'merchant_id'         => $merchantId,
-                'outlet_id'           => $outletId,
-                'month'               => $month,
-                'total_revenue'       => $totalRevenue,
-                'total_transactions'  => $totalTransactions,
-            ];
-
-            return [
-                'summary' => $summary,
-                'reportData' => $reportData
-            ];
-        });
-
-        $summary = $cachedReport['summary'];
-        $reportData = $cachedReport['reportData'];
-
-        // 4. Pagination
+        // Pagination
         $perPage = $request->input('per_page', 10);
         $currentPage = $request->input('page', 1);
         
-        $pagedData = array_slice($reportData, ($currentPage - 1) * $perPage, $perPage);
+        $pagedData = array_slice($details, ($currentPage - 1) * $perPage, $perPage);
         
-        $paginator = new LengthAwarePaginator(array_values($pagedData), count($reportData), $perPage, $currentPage, [
+        $paginator = new LengthAwarePaginator(array_values($pagedData), count($details), $perPage, $currentPage, [
             'path' => $request->url(),
             'query' => $request->query()
         ]);
