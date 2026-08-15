@@ -58,7 +58,11 @@ This project is a technical test implementation for Majoo, building a Reporting 
    ```bash
    php artisan test
    ```
-   *The tests are fully isolated and use SQLite (`RefreshDatabase`) for speed.*
+   *The tests are fully isolated and use SQLite (`RefreshDatabase`) for speed. The test suite covers:*
+   - *Feature Tests for Authentication (validations, empty fields, non-existent users).*
+   - *Feature Tests for the Reporting Engine (pagination, missing parameters, edge cases like months with zero transactions).*
+   - *Unit Tests for Eloquent Model Relationships.*
+   - *Mocking of the Redis Cache Facade to ensure the caching layer is utilized properly.*
 
 ---
 
