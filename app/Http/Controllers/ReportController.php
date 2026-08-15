@@ -31,13 +31,13 @@ class ReportController extends Controller
                 name: "merchant_id",
                 in: "query",
                 required: true,
-                schema: new OA\Schema(type: "integer")
+                schema: new OA\Schema(type: "integer", example: 1)
             ),
             new OA\Parameter(
                 name: "outlet_id",
                 in: "query",
                 required: false,
-                schema: new OA\Schema(type: "integer")
+                schema: new OA\Schema(type: "integer", example: 1)
             ),
             new OA\Parameter(
                 name: "month",
