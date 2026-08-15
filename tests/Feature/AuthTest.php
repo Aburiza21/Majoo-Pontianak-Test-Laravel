@@ -56,4 +56,39 @@ class AuthTest extends TestCase
         $response->assertStatus(422)
                  ->assertJsonValidationErrors(['email', 'password']);
     }
+
+    public function test_user_cannot_login_with_non_existent_email()
+    {
+        $response = $this->postJson('/api/login', [
+            'email' => 'nonexistent@example.com',
+            'password' => 'password123',
+        ]);
+
+        $response->assertStatus(401)
+                 ->assertJson([
+                     'error' => 'Unauthorized'
+                 ]);
+    }
+
+    public function test_login_validation_requires_valid_email_format()
+    {
+        $response = $this->postJson('/api/login', [
+            'email' => 'invalid-email-format',
+            'password' => 'password123',
+        ]);
+
+        $response->assertStatus(422)
+                 ->assertJsonValidationErrors(['email']);
+    }
+
+    public function test_user_cannot_login_with_empty_password()
+    {
+        $response = $this->postJson('/api/login', [
+            'email' => 'test@example.com',
+            'password' => '',
+        ]);
+
+        $response->assertStatus(422)
+                 ->assertJsonValidationErrors(['password']);
+    }
 }

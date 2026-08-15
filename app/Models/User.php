@@ -29,4 +29,9 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function merchants()
+    {
+        return $this->hasMany(Merchant::class, 'user_id');
+    }
 }

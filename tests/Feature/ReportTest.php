@@ -99,4 +99,118 @@ class ReportTest extends TestCase
         $this->assertEquals(0, $day2['total_revenue']);
         $this->assertEquals(0, $day2['total_transactions']);
     }
+
+    public function test_report_validation_fails_with_invalid_month_format()
+    {
+        $user = User::factory()->create();
+        $merchant = Merchant::create([
+            'user_id' => $user->id,
+            'merchant_name' => 'Merchant 1',
+            'created_by' => $user->id,
+            'updated_by' => $user->id,
+        ]);
+        $headers = $this->getAuthHeaders($user);
+
+        $response = $this->getJson('/api/report/monthly?merchant_id=' . $merchant->id . '&month=invalid-date', $headers);
+        $response->assertStatus(422)
+                 ->assertJsonValidationErrors(['month']);
+
+        $response = $this->getJson('/api/report/monthly?merchant_id=' . $merchant->id . '&month=2026-13', $headers);
+        $response->assertStatus(422)
+                 ->assertJsonValidationErrors(['month']);
+    }
+
+    public function test_report_validation_fails_without_merchant_id()
+    {
+        $user = User::factory()->create();
+        $headers = $this->getAuthHeaders($user);
+
+        $response = $this->getJson('/api/report/monthly?month=2026-08', $headers);
+        $response->assertStatus(422)
+                 ->assertJsonValidationErrors(['merchant_id']);
+    }
+
+    public function test_report_with_pagination_parameters()
+    {
+        $user = User::factory()->create();
+        $merchant = Merchant::create([
+            'user_id' => $user->id,
+            'merchant_name' => 'Merchant 1',
+            'created_by' => $user->id,
+            'updated_by' => $user->id,
+        ]);
+        $headers = $this->getAuthHeaders($user);
+
+        $response = $this->getJson('/api/report/monthly?merchant_id=' . $merchant->id . '&month=2026-08&page=2&per_page=5', $headers);
+        
+        $response->assertStatus(200);
+        $json = $response->json();
+        
+        $this->assertEquals(5, count($json['details']['data']));
+        $this->assertEquals(2, $json['details']['current_page']);
+        $this->assertEquals(5, $json['details']['per_page']);
+        $this->assertEquals(31, $json['details']['total']);
+    }
+
+    public function test_report_generates_empty_data_for_month_with_no_transactions()
+    {
+        $user = User::factory()->create();
+        $merchant = Merchant::create([
+            'user_id' => $user->id,
+            'merchant_name' => 'Merchant 1',
+            'created_by' => $user->id,
+            'updated_by' => $user->id,
+        ]);
+        $headers = $this->getAuthHeaders($user);
+
+        $response = $this->getJson('/api/report/monthly?merchant_id=' . $merchant->id . '&month=2026-09', $headers);
+        
+        $response->assertStatus(200);
+        $json = $response->json();
+
+        $this->assertEquals(0, $json['summary']['total_revenue']);
+        $this->assertEquals(0, $json['summary']['total_transactions']);
+        
+        $this->assertEquals(30, $json['details']['total']); // September has 30 days
+        $this->assertEquals(0, $json['details']['data'][0]['total_revenue']);
+    }
+
+    public function test_report_utilizes_cache()
+    {
+        $user = User::factory()->create();
+        $merchant = Merchant::create([
+            'user_id' => $user->id,
+            'merchant_name' => 'Merchant 1',
+            'created_by' => $user->id,
+            'updated_by' => $user->id,
+        ]);
+        
+        $headers = $this->getAuthHeaders($user);
+        
+        $cacheKey = "report_monthly_{$merchant->id}_0_2026-10";
+
+        // Memastikan facade Cache dipanggil
+        \Illuminate\Support\Facades\Cache::shouldReceive('remember')
+            ->once()
+            ->with($cacheKey, 60 * 60, \Mockery::type('Closure'))
+            ->andReturn([
+                'summary' => [
+                    'merchant_id' => $merchant->id,
+                    'outlet_id' => null,
+                    'month' => '2026-10',
+                    'total_revenue' => 5000,
+                    'total_transactions' => 10,
+                ],
+                'reportData' => []
+            ]);
+
+        $response = $this->getJson('/api/report/monthly?merchant_id=' . $merchant->id . '&month=2026-10', $headers);
+        
+        if ($response->status() !== 200) {
+            dump($response->json());
+        }
+        $response->assertStatus(200);
+        $json = $response->json();
+        $this->assertEquals(5000, $json['summary']['total_revenue']);
+    }
 }
